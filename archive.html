@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Архив — Sora 2 Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, doc, deleteDoc, query, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAn8kZwJV1D7wiABHZBflOHhVZYeyyK65k",
+    authDomain: "sora2-studio.firebaseapp.com",
+    projectId: "sora2-studio",
+    storageBucket: "sora2-studio.firebasestorage.app",
+    messagingSenderId: "114301004185",
+    appId: "1:114301004185:web:003c88f1be944cb204cb08"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window._db = db;
+  window._collection = collection;
+  window._getDocs = getDocs;
+  window._doc = doc;
+  window._deleteDoc = deleteDoc;
+  window._query = query;
+  window._orderBy = orderBy;
+  window._limit = limit;
+  window._startAfter = startAfter;
+
+  window.addEventListener('load', () => { loadArchive(); });
+</script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0b;--panel:#111113;--panel2:#18181c;
+  --border:#ffffff0f;--border2:#ffffff18;
+  --accent:#e8ff47;--accent-dim:#e8ff4722;
+  --text:#f0f0f0;--muted:#666;--muted2:#444;
+  --red:#ff4545;--green:#47ff8a;--radius:14px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* TOPBAR */
+.topbar{padding:16px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;background:var(--panel);position:sticky;top:0;z-index:10;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.logo-text{font-size:15px;font-weight:600;letter-spacing:-0.02em;}
+.topbar-sep{width:1px;height:16px;background:var(--border2);}
+.back-btn{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;color:var(--muted);font-size:12px;font-family:'DM Mono',monospace;cursor:pointer;text-decoration:none;transition:color .15s;}
+.back-btn:hover{color:var(--text);}
+
+/* FILTER BAR */
+.filter-bar{padding:16px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.filter-btn{padding:5px 14px;background:var(--panel2);border:1px solid var(--border2);border-radius:20px;color:var(--muted);font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;transition:all .15s;}
+.filter-btn.active{background:var(--accent-dim);border-color:#e8ff4744;color:var(--accent);}
+.search-input{background:var(--panel2);border:1px solid var(--border2);border-radius:20px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:5px 14px;outline:none;width:220px;transition:border-color .2s;}
+.search-input:focus{border-color:#e8ff4755;}
+.search-input::placeholder{color:var(--muted2);}
+.stats{margin-left:auto;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);display:flex;gap:12px;}
+
+/* GALLERY */
+.gallery-area{padding:20px 24px;}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+.vid-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .2s,transform .15s;position:relative;}
+.vid-card:hover{border-color:var(--border2);transform:translateY(-2px);}
+.vid-thumb{width:100%;aspect-ratio:16/9;background:var(--panel2);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.vid-thumb.portrait{aspect-ratio:9/16;}
+.vid-thumb video{width:100%;height:100%;object-fit:cover;}
+.play-icon{position:absolute;width:36px;height:36px;background:#ffffff22;backdrop-filter:blur(4px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;border:1px solid #ffffff33;opacity:0;transition:opacity .2s;}
+.vid-card:hover .play-icon{opacity:1;}
+.vid-info{padding:10px 12px;}
+.vid-prompt{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vid-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted2);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.vid-user-badge{background:var(--accent-dim);color:var(--accent);font-size:9px;padding:2px 6px;border-radius:20px;border:1px solid #e8ff4722;font-family:'DM Mono',monospace;}
+.vid-card.no-video .vid-thumb{opacity:.5;}
+
+/* DELETE BTN */
+.btn-delete-card{position:absolute;top:6px;left:6px;width:24px;height:24px;background:#000000aa;border:1px solid #ff454533;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;color:#ff8060;z-index:3;opacity:0;transition:opacity .2s,background .15s;}
+.vid-card:hover .btn-delete-card{opacity:1;}
+.btn-delete-card:hover{background:#ff454533;border-color:#ff454566;}
+
+/* STATES */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 24px;text-align:center;}
+.state-icon{font-size:40px;opacity:.3;}
+.state-title{font-size:15px;font-weight:500;color:var(--muted);}
+.state-sub{font-size:13px;color:var(--muted);max-width:300px;line-height:1.5;}
+.btn-load{padding:10px 24px;background:var(--accent);border:none;border-radius:10px;color:#0a0a0b;font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;cursor:pointer;transition:opacity .15s;}
+.btn-load:hover{opacity:.9;}
+.btn-load:disabled{opacity:.4;cursor:not-allowed;}
+
+/* LOAD MORE */
+.load-more-wrap{padding:24px;display:flex;justify-content:center;}
+.btn-more{padding:9px 24px;background:var(--panel2);border:1px solid var(--border2);border-radius:10px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;transition:all .15s;}
+.btn-more:hover{color:var(--text);border-color:var(--border2);}
+.btn-more:disabled{opacity:.4;cursor:not-allowed;}
+
+/* VIEWER */
+.viewer{position:fixed;inset:0;background:#000000ee;backdrop-filter:blur(16px);z-index:100;display:none;align-items:center;justify-content:center;padding:24px;}
+.viewer.open{display:flex;}
+.viewer-inner{display:flex;max-width:1000px;width:100%;max-height:92vh;border-radius:20px;overflow:hidden;border:1px solid var(--border2);}
+.viewer-video-side{flex:1;background:#000;display:flex;align-items:center;justify-content:center;position:relative;min-width:0;}
+.viewer-video-side video{width:100%;height:100%;max-height:92vh;object-fit:contain;}
+.viewer-close{position:absolute;top:14px;right:14px;background:#00000088;border:1px solid var(--border2);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:16px;z-index:2;}
+.viewer-close:hover{background:#ffffff22;}
+.viewer-info-side{width:280px;flex-shrink:0;background:var(--panel);display:flex;flex-direction:column;border-left:1px solid var(--border);}
+.viewer-section{padding:14px 18px;border-bottom:1px solid var(--border);}
+.viewer-section-label{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
+.viewer-prompt-text{font-size:12px;line-height:1.6;color:var(--text);}
+.viewer-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.viewer-tag{background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);}
+.viewer-actions{padding:14px 18px;display:flex;flex-direction:column;gap:8px;margin-top:auto;}
+.btn-dl{display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:var(--accent);color:#0a0a0b;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;cursor:pointer;text-decoration:none;width:100%;}
+.btn-dl:hover{opacity:.9;}
+
+/* TOAST */
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{pointer-events:all;background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;box-shadow:0 8px 32px #00000088;animation:slideIn .25s ease;min-width:240px;}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+.toast-title{font-size:13px;font-weight:500;}
+.toast.t-success{border-color:#47ff8a33;} .toast.t-success .toast-title{color:var(--green);}
+.toast.t-error{border-color:#ff454533;} .toast.t-error .toast-title{color:#ff8080;}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">▶</div>
+    <div class="logo-text">Архив</div>
+  </div>
+  <div class="topbar-sep"></div>
+  <a class="back-btn" href="sora2-studio_optimized.html">← Назад</a>
+  <div class="topbar-sep"></div>
+  <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace" id="statsLabel">—</div>
+  <div style="margin-left:auto;">
+    <button class="btn-load" id="reloadBtn" onclick="loadArchive()">↻ Обновить</button>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <button class="filter-btn active" id="fAll" onclick="setFilter('all')">Все</button>
+  <button class="filter-btn" id="fMine" onclick="setFilter('mine')">Мои</button>
+  <button class="filter-btn" id="fCompleted" onclick="setFilter('completed')">Готовые</button>
+  <button class="filter-btn" id="fFailed" onclick="setFilter('failed')">Ошибки</button>
+  <input class="search-input" id="searchInput" placeholder="Поиск по промпту…" oninput="renderArchive()">
+</div>
+
+<div id="mainContent">
+  <div class="state-box">
+    <div class="state-icon">⏳</div>
+    <div class="state-title">Загружаем архив…</div>
+  </div>
+</div>
+
+<!-- VIEWER -->
+<div class="viewer" id="viewer" onclick="if(event.target===this)closeViewer()">
+  <div class="viewer-inner">
+    <div class="viewer-video-side">
+      <video id="viewerVideo" controls playsinline></video>
+      <div class="viewer-close" onclick="closeViewer()">✕</div>
+    </div>
+    <div class="viewer-info-side">
+      <div class="viewer-section">
+        <div class="viewer-section-label">Автор</div>
+        <div id="viewerAuthor" style="font-size:13px;font-weight:500;">—</div>
+        <div id="viewerDate" style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px;">—</div>
+      </div>
+      <div class="viewer-section">
+        <div class="viewer-section-label">Промпт</div>
+        <div class="viewer-prompt-text" id="viewerPrompt">—</div>
+      </div>
+      <div class="viewer-section">
+        <div class="viewer-section-label">Параметры</div>
+        <div class="viewer-tags" id="viewerTags"></div>
+      </div>
+      <div class="viewer-actions">
+        <a class="btn-dl" id="viewerDl" download>⬇ Скачать MP4</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const ADMIN_NICK = 'DanAdminMGC';
+const PAGE_SIZE = 50;
+const COSTS = { 'sora-2': 0.10, 'sora-2-pro-720': 0.30, 'sora-2-pro': 0.50 };
+
+let allDocs = [];
+let currentFilter = 'all';
+let currentUser = localStorage.getItem('sora2_user') || null;
+let viewerBlobUrls = new Map(); // jobId -> blobUrl
+
+function isAdmin() { return (currentUser || '').trim() === ADMIN_NICK; }
+
+function calcCost(e) {
+  const secs = parseFloat(e.seconds) || 0;
+  const hiRes = (e.size || '').includes('1792') || (e.size || '').includes('1024x1792');
+  let rate = hiRes ? (e.model === 'sora-2-pro' ? 0.50 : 0.10) : (e.model === 'sora-2-pro' ? 0.30 : 0.10);
+  return secs * rate;
+}
+function formatCost(v) { return '$' + v.toFixed(2); }
+
+async function loadArchive() {
+  const btn = document.getElementById('reloadBtn');
+  btn.disabled = true; btn.textContent = '…';
+  document.getElementById('mainContent').innerHTML = `<div class="state-box"><div class="state-icon">⏳</div><div class="state-title">Загружаем…</div></div>`;
+
+  try {
+    const q = window._query(
+      window._collection(window._db, 'videos'),
+      window._orderBy('createdAt', 'desc'),
+      window._limit(500)
+    );
+    const snap = await window._getDocs(q);
+    allDocs = [];
+    snap.forEach(d => allDocs.push({ ...d.data(), firebaseId: d.id }));
+    renderArchive();
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML = `<div class="state-box"><div class="state-icon">⚠️</div><div class="state-title">Ошибка загрузки</div><div class="state-sub">${e.message}</div></div>`;
+  }
+  btn.disabled = false; btn.textContent = '↻ Обновить';
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  ['fAll','fMine','fCompleted','fFailed'].forEach(id => document.getElementById(id).classList.remove('active'));
+  const map = {all:'fAll',mine:'fMine',completed:'fCompleted',failed:'fFailed'};
+  document.getElementById(map[f]).classList.add('active');
+  renderArchive();
+}
+
+function renderArchive() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  let docs = allDocs;
+
+  if (currentFilter === 'mine') docs = docs.filter(v => (v.user||'').toLowerCase() === (currentUser||'').toLowerCase());
+  else if (currentFilter === 'completed') docs = docs.filter(v => v.status === 'completed');
+  else if (currentFilter === 'failed') docs = docs.filter(v => v.status === 'failed' || v.status === 'cancelled');
+
+  if (search) docs = docs.filter(v => (v.prompt||'').toLowerCase().includes(search) || (v.user||'').toLowerCase().includes(search));
+
+  const totalCost = docs.filter(v => v.status === 'completed').reduce((s, v) => s + calcCost(v), 0);
+  document.getElementById('statsLabel').textContent = `${docs.length} записей · ${formatCost(totalCost)}`;
+
+  if (!docs.length) {
+    document.getElementById('mainContent').innerHTML = `<div class="state-box"><div class="state-icon">🎬</div><div class="state-title">Ничего не найдено</div><div class="state-sub">Попробуй другой фильтр или поисковый запрос</div></div>`;
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'gallery-grid';
+  docs.forEach(entry => grid.appendChild(buildCard(entry)));
+
+  const wrap = document.createElement('div');
+  wrap.className = 'gallery-area';
+  wrap.appendChild(grid);
+  document.getElementById('mainContent').innerHTML = '';
+  document.getElementById('mainContent').appendChild(wrap);
+}
+
+function buildCard(entry) {
+  const pts = (entry.size||'1280x720').split('x');
+  const portrait = parseInt(pts[0]) < parseInt(pts[1]);
+  const card = document.createElement('div');
+  card.className = 'vid-card';
+  const isMe = (entry.user||'').toLowerCase() === (currentUser||'').toLowerCase();
+  const canDelete = isMe || isAdmin();
+  const blobUrl = viewerBlobUrls.get(entry.jobId);
+  const cost = formatCost(calcCost(entry));
+  const date = entry.createdAt ? new Date(entry.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+
+  const userBadge = `<span class="vid-user-badge">${entry.user||'?'}</span>`;
+  const statusColor = entry.status === 'completed' ? 'var(--green)' : entry.status === 'failed' ? 'var(--red)' : 'var(--muted)';
+
+  if (entry.status === 'completed' && blobUrl) {
+    card.innerHTML = `<div class="vid-thumb ${portrait?'portrait':''}">
+      <video src="${blobUrl}" muted loop></video>
+      <div class="play-icon">▶</div>
+    </div>
+    <div class="vid-info">
+      <div class="vid-prompt">${entry.prompt||'—'}</div>
+      <div class="vid-meta">${userBadge}<span>${date}</span><span style="margin-left:auto">${cost}</span></div>
+    </div>`;
+    card.addEventListener('mouseenter', () => card.querySelector('video').play());
+    card.addEventListener('mouseleave', () => card.querySelector('video').pause());
+    card.addEventListener('click', () => openViewer(entry, blobUrl));
+  } else {
+    const apiKey = localStorage.getItem('sora2_apikey_' + currentUser);
+    const canLoad = entry.status === 'completed' && apiKey && isMe;
+    card.className += ' no-video';
+    card.innerHTML = `<div class="vid-thumb ${portrait?'portrait':''}" style="flex-direction:column;gap:6px;">
+      <div style="font-size:20px;opacity:.4">${entry.status==='completed'?'✦':entry.status==='failed'?'✕':'⊘'}</div>
+      <div style="font-size:10px;color:${statusColor};font-family:'DM Mono',monospace">${entry.status||'—'}</div>
+      ${canLoad ? `<button onclick="event.stopPropagation();loadVideo(this,'${entry.jobId}')" style="margin-top:4px;padding:4px 12px;background:var(--accent);color:#0a0a0b;border:none;border-radius:7px;font-size:10px;font-weight:600;cursor:pointer;">⬇ Загрузить</button>` : ''}
+    </div>
+    <div class="vid-info">
+      <div class="vid-prompt">${entry.prompt||'—'}</div>
+      <div class="vid-meta">${userBadge}<span>${date}</span><span style="margin-left:auto;color:${statusColor}">${entry.status}</span></div>
+    </div>`;
+    if (entry.status !== 'completed') card.style.cursor = 'default';
+  }
+
+  if (canDelete) {
+    const thumb = card.querySelector('.vid-thumb');
+    const btn = document.createElement('button');
+    btn.className = 'btn-delete-card'; btn.title = 'Удалить'; btn.innerHTML = '🗑';
+    btn.addEventListener('click', e => { e.stopPropagation(); deleteEntry(entry, card); });
+    thumb.appendChild(btn);
+  }
+
+  return card;
+}
+
+async function loadVideo(btn, jobId) {
+  const apiKey = localStorage.getItem('sora2_apikey_' + currentUser);
+  if (!apiKey) return;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await fetch(`https://api.openai.com/v1/videos/${jobId}/content`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    viewerBlobUrls.set(jobId, blobUrl);
+    renderArchive();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '⬇ Загрузить';
+    showToast('error', 'Ошибка загрузки', e.message);
+  }
+}
+
+async function deleteEntry(entry, card) {
+  if (!confirm(`Удалить "${(entry.prompt||'').slice(0,40)}…"?`)) return;
+  try {
+    if (entry.firebaseId && window._db) {
+      await window._deleteDoc(window._doc(window._db, 'videos', entry.firebaseId));
+    }
+    allDocs = allDocs.filter(v => v.jobId !== entry.jobId);
+    card.style.opacity = '0'; card.style.transform = 'scale(.95)'; card.style.transition = 'all .2s';
+    setTimeout(() => { card.remove(); }, 200);
+    showToast('success', 'Удалено');
+  } catch(e) {
+    showToast('error', 'Ошибка', e.message);
+  }
+}
+
+function openViewer(entry, blobUrl) {
+  document.getElementById('viewerVideo').src = blobUrl;
+  document.getElementById('viewerVideo').play();
+  document.getElementById('viewerAuthor').textContent = entry.user || '?';
+  document.getElementById('viewerDate').textContent = entry.createdAt ? new Date(entry.createdAt).toLocaleString('ru-RU') : '—';
+  document.getElementById('viewerPrompt').textContent = entry.prompt || '—';
+  const tags = document.getElementById('viewerTags');
+  tags.innerHTML = '';
+  [entry.model, entry.size, entry.seconds ? entry.seconds+'s' : null, formatCost(calcCost(entry))].filter(Boolean)
+    .forEach(t => { const s = document.createElement('span'); s.className = 'viewer-tag'; s.textContent = t; tags.appendChild(s); });
+  const dl = document.getElementById('viewerDl');
+  dl.href = blobUrl; dl.download = `sora2_${entry.jobId||'video'}.mp4`;
+  document.getElementById('viewer').classList.add('open');
+}
+
+function closeViewer() {
+  document.getElementById('viewer').classList.remove('open');
+  document.getElementById('viewerVideo').pause();
+}
+
+function showToast(type, title, msg='') {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast t-${type}`;
+  el.innerHTML = `<div class="toast-title">${title}</div>${msg?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${msg}</div>`:''}`;
+  c.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3000);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
+</script>
+</body>
+</html>
